@@ -1,0 +1,216 @@
+
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>إدارة المستخدمين</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.rtl.min.css" rel="stylesheet" />
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link href="https://unpkg.com/aos@2.3.4/dist/aos.css" rel="stylesheet" />
+  <script src="checkauth.js"></script>
+  <script src="logout.js"></script>
+  <style>
+    body { font-family: 'Cairo', sans-serif; background: #f8f9fa; color: #333; }
+    .navbar { background: #1e2a38; color: white; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+    .navbar .logo { font-size: 1.5rem; font-weight: bold; }
+    .navbar a { color: #fff; margin-right: 1rem; text-decoration: none; font-weight: 500; transition: opacity 0.3s ease; }
+    .navbar a:hover { opacity: 0.7; }
+    .search-bar input { border-radius: 30px; padding: 0.75rem 1.5rem; border: 2px solid #e0e0e0; transition: all 0.3s ease; }
+    .search-bar input:focus { border-color: #1abc9c; box-shadow: 0 0 10px rgba(26, 188, 156, 0.1); }
+    .card-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1.5rem; }
+    .user-card { background: white; border-radius: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.05); padding: 1.5rem; transition: all 0.3s ease; }
+    .user-card:hover { transform: translateY(-5px); box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+    .user-card h5 { font-weight: 700; color: #1e2a38; }
+    .user-card .info { font-size: 0.95rem; margin-bottom: 0.4rem; color: #555; }
+    .user-card .actions { margin-top: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    .btn { border-radius: 25px; font-weight: 600; transition: all 0.3s ease; }
+    .btn:hover { transform: translateY(-2px); box-shadow: 0 3px 10px rgba(0,0,0,0.1); }
+    .view-toggle { position: fixed; top: 80px; left: 20px; z-index: 1050; display: flex; flex-direction: column; gap: 0.5rem; opacity: 0; transform: translateY(-10px); transition: opacity 0.5s ease, transform 0.5s ease; }
+    .view-toggle.show { opacity: 1; transform: translateY(0); }
+    .role-tabs { margin-bottom: 2rem; justify-content: center; }
+  </style>
+</head>
+<body>
+  <div class="navbar">
+    <div class="logo"><i class="fa-solid fa-users-gear me-2"></i>نظام الإدارة</div>
+    <div>
+      <a href="AdminHome.html"><i class="fa-solid fa-house-chimney"></i> الرئيسية</a>
+      <a href="#"><i class="fa-solid fa-gear"></i> المستشفيات</a>
+      <button onclick="logout()" class="btn btn-danger">تسجيل الخروج</button>
+    </div>
+  </div>
+
+  <div class="view-toggle" id="viewToggle">
+    <button class="btn btn-outline-primary" id="cardViewBtn" aria-label="عرض البطاقات"><i class="fas fa-th-large"></i></button>
+    <button class="btn btn-outline-secondary" id="tableViewBtn" aria-label="عرض الجدول"><i class="fas fa-list"></i></button>
+  </div>
+
+  <div class="container py-4">
+    <h2 data-aos="fade-up">إدارة المستخدمين</h2>
+
+    <ul class="nav nav-tabs role-tabs" id="roleTabs">
+      <li class="nav-item">
+        <button class="nav-link active" data-role="patient" type="button">المرضى</button>
+      </li>
+      <li class="nav-item">
+        <button class="nav-link" data-role="hospital" type="button">المستشفيات</button>
+      </li>
+      <li class="nav-item">
+        <button class="nav-link" data-role="admin" type="button">المشرفون</button>
+      </li>
+    </ul>
+
+    <div class="search-bar my-3" data-aos="fade-up">
+      <input type="text" class="form-control" placeholder="ابحث..." id="searchInput">
+    </div>
+
+    <div id="tableContainer" class="table-responsive d-none">
+      <table class="table">
+        <thead id="tableHead"></thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+    <div class="card-container" id="cardContainer"></div>
+  </div>
+  <script>
+    checkAuth(["admin"]);
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://unpkg.com/aos@2.3.4/dist/aos.js"></script>
+  <script>
+    AOS.init();
+
+    const roles = {
+      patient: {
+        api: 'https://localhost:7145/api/Patient',
+        fields: item => `
+          <h5>${item.paitentName}</h5>
+          <div class="info">رقم الهوية: ${item.paitentNationalID}</div>
+          <div class="info">أرقام الطوارئ: ${item.emergencyContact || '-'}</div>
+          <div class="info">سجل طبي: ${item.recordID || '-'}</div>
+          <div class="info">User ID: ${item.userID || '-'}</div>
+        `,
+        tableCols: ['#','ID','الاسم','رقم الهوية','رقم الطوارئ','سجل طبي','UserID','إجراءات'],
+        rowData: (item, i) => `
+          <td>${i + 1}</td><td>${item.patientID}</td><td>${item.paitentName}</td><td>${item.paitentNationalID}</td>
+          <td>${item.emergencyContact || '-'}</td><td>${item.recordID || '-'}</td><td>${item.userID || '-'}</td>
+          <td><div class='d-flex gap-2'>
+            <button class='btn btn-sm btn-primary' onclick="window.location='UserEdit.html?role=patient&id=${item.patientID}'">تعديل</button>
+            <button class='btn btn-sm btn-success' onclick="window.location='medical-history.html?recordID=${item.recordID}'">السجل الصحي</button>
+          </div></td>
+        `,
+        actions: item => `
+          <button class="btn btn-sm btn-primary" onclick="window.location='UserEdit.html?role=patient&id=${item.patientID}'">تعديل</button>
+          <button class="btn btn-sm btn-success" onclick="window.location='medical-history.html?recordID=${item.recordID}'">السجل الصحي</button>`
+      },
+      hospital: {
+        api: 'https://localhost:7145/api/Hospitals',
+        fields: item => `
+          <h5>${item.hospitalName}</h5>
+          <div class="info">الموقع: ${item.location}</div>
+          <div class="info">الهاتف: ${item.phoneNumber}</div>
+          <div class="info">سعة الأسرة: ${item.bedCapacity}</div>
+          <div class="info">User ID: ${item.userID}</div>
+        `,
+        tableCols: ['#','ID','الاسم','الموقع','الهاتف','سعة الأسرة','UserID','إجراءات'],
+        rowData: (item, i) => `
+          <td>${i + 1}</td><td>${item.hospitalID}</td><td>${item.hospitalName}</td><td>${item.location}</td>
+          <td>${item.phoneNumber}</td><td>${item.bedCapacity}</td><td>${item.userID}</td>
+          <td><div class='d-flex gap-2'>
+            <button class='btn btn-sm btn-primary' onclick="window.location='UserEdit.html?role=hospital&id=${item.hospitalID}'">تعديل</button>
+            <button class='btn btn-sm btn-warning text-white' onclick="window.location='hospitalinfo.html?userID=${item.userID}'">معلومات المستشفى</button>
+          </div></td>
+        `,
+        actions: item => `
+          <button class="btn btn-sm btn-primary" onclick="window.location='UserEdit.html?role=hospital&id=${item.hospitalID}'">تعديل</button>
+          <button class="btn btn-sm btn-warning text-white" onclick="window.location='hospitalinfo.html?userID=${item.userID}'">معلومات المستشفى</button>`
+      },
+      admin: {
+        api: 'https://localhost:7145/api/Admins',
+        fields: item => `
+          <h5>المشرف ID: ${item.adminID}</h5>
+          <div class="info">User ID: ${item.userID}</div>
+        `,
+        tableCols: ['#','AdminID','UserID','إجراءات'],
+        rowData: (item, i) => `
+          <td>${i + 1}</td><td>${item.adminID}</td><td>${item.userID}</td>
+          <td><button class='btn btn-sm btn-primary' onclick="window.location='UserEdit.html?role=admin&id=${item.adminID}'">تعديل</button></td>
+        `,
+        actions: item => `<button class="btn btn-sm btn-primary" onclick="window.location='UserEdit.html?role=admin&id=${item.adminID}'">تعديل</button>`
+      }
+    };
+
+    let currentRole = 'patient';
+    let dataCache = [];
+    const searchInput = document.getElementById('searchInput');
+    const tableHead = document.getElementById('tableHead');
+    const tableBody = document.getElementById('tableBody');
+    const cardContainer = document.getElementById('cardContainer');
+    const tableContainer = document.getElementById('tableContainer');
+
+    document.addEventListener('DOMContentLoaded', function () {
+      const viewToggle = document.getElementById('viewToggle');
+      setTimeout(() => viewToggle.classList.add('show'), 300);
+
+      document.getElementById('cardViewBtn').addEventListener('click', () => {
+        tableContainer.classList.add('d-none');
+        cardContainer.classList.remove('d-none');
+        renderCards(dataCache);
+      });
+
+      document.getElementById('tableViewBtn').addEventListener('click', () => {
+        cardContainer.classList.add('d-none');
+        tableContainer.classList.remove('d-none');
+        renderTable(dataCache);
+      });
+
+      document.querySelectorAll('#roleTabs .nav-link').forEach(tab => {
+        tab.addEventListener('click', () => {
+          document.querySelectorAll('#roleTabs .nav-link').forEach(t => t.classList.remove('active'));
+          tab.classList.add('active');
+          currentRole = tab.dataset.role;
+          fetchData();
+        });
+      });
+
+      searchInput.addEventListener('input', () => {
+        const term = searchInput.value.trim().toLowerCase();
+        const filtered = dataCache.filter(item =>
+          Object.values(item).some(v => v && v.toString().toLowerCase().includes(term))
+        );
+        renderCards(filtered);
+        renderTable(filtered);
+      });
+
+      fetchData();
+    });
+
+    async function fetchData() {
+      try {
+        const res = await fetch(roles[currentRole].api);
+        dataCache = await res.json();
+        renderCards(dataCache);
+        renderTable(dataCache);
+      } catch (e) {
+        cardContainer.innerHTML = `<p class="text-danger">خطأ في تحميل البيانات: ${e.message}</p>`;
+      }
+    }
+
+    function renderCards(data) {
+      cardContainer.innerHTML = data.map((item, i) => `
+        <div class="user-card" data-aos="fade-up" data-aos-delay="${i * 100}">
+          ${roles[currentRole].fields(item)}
+          <div class="actions">${roles[currentRole].actions(item)}</div>
+        </div>
+      `).join('');
+    }
+
+    function renderTable(data) {
+      tableHead.innerHTML = `<tr>${roles[currentRole].tableCols.map(c => `<th>${c}</th>`).join('')}</tr>`;
+      tableBody.innerHTML = data.map((item, i) => `<tr>${roles[currentRole].rowData(item, i)}</tr>`).join('');
+    }
+  </script>
+</body>
+</html>

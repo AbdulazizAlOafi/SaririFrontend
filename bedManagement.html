@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>إدارة الأسرة</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.rtl.min.css" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <script src="checkauth.js"></script>
+  <script src="logout.js"></script>
+  <style>
+    body {
+      font-family: 'Tajawal', sans-serif;
+      background-color: #f4f7fc;
+    }
+    .navbar-custom {
+      background-color: #2c3e50;
+      padding-top: 0.5rem;
+      padding-bottom: 0.5rem;
+    }
+    .navbar-custom .navbar-brand {
+      font-size: 1.2rem;
+    }
+    .navbar-custom .nav-link {
+      color: #fff;
+      font-size: 16px;
+      margin: 0 5px;
+      padding: 4px 8px; /* reduce clickable area padding */
+      transition: color 0.3s;
+    }
+    .navbar-custom .nav-link:hover {
+      color: #1abc9c;
+    }
+    .container {
+      max-width: 1100px;
+      margin: 30px auto;
+      padding: 20px;
+    }
+    .section {
+      background: white;
+      border-radius: 15px;
+      padding: 25px;
+      box-shadow: 0 6px 12px rgba(0,0,0,0.1);
+    }
+    h2 {
+      border-bottom: 2px solid #1abc9c;
+      padding-bottom: 10px;
+      color: #2c3e50;
+      margin-bottom: 20px;
+    }
+    .status-summary {
+      display: flex;
+      justify-content: space-around;
+      margin-bottom: 20px;
+      font-weight: bold;
+      font-size: 18px;
+    }
+    .status-summary span {
+      background-color: #ecf0f1;
+      padding: 10px 20px;
+      border-radius: 8px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th, td {
+      text-align: center;
+      padding: 12px;
+      border-bottom: 1px solid #ddd;
+    }
+    th {
+      background-color: #1abc9c;
+      color: white;
+    }
+    .btn {
+      background: #2973B2;
+      color: white;
+      padding: 6px 12px;
+      margin: 2px;
+      border: none;
+      border-radius: 5px;
+      font-weight: bold;
+    }
+    .btn:hover {
+      background-color: #16a085;
+    }
+    .selected-patient {
+      font-weight: bold;
+      color: #2c3e50;
+    }
+    select {
+      border-radius: 5px;
+      padding: 6px;
+    }
+  </style>
+</head>
+<body>
+  <!-- Slimmed-down Navbar -->
+  <nav class="navbar navbar-expand-lg navbar-custom py-0">
+    <div class="container">
+      <a class="navbar-brand text-white" href="#">نظام إدارة المستشفى</a>
+      <div class="collapse navbar-collapse justify-content-center">
+        <ul class="navbar-nav">
+          <li class="nav-item"><a class="nav-link" href="HospitalHome.html">الرئيسية</a></li>
+          <li class="nav-item"><a class="nav-link" href="HospitalInfo.html">بيانات المستشفى</a></li>
+          <li class="nav-item"><a class="nav-link" href="PatientList.html">بيانات المرضى</a></li>
+          <li class="nav-item"><a class="nav-link" href="EmergencyRequests.html">طلبات الطوارئ</a></li>
+          <li><button onclick="logout()" class="btn btn-danger">تسجيل الخروج</button></li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="section">
+      <h2>إدارة الأسرة</h2>
+      <div class="status-summary">
+        <span>السعة الكلية: <strong id="bedCapacity">0</strong></span>
+        <span>مشغولة: <strong id="occupiedCount">0</strong></span>
+        <span>متاحة: <strong id="availableCount">0</strong></span>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>الحالة</th>
+            <th>تخصيص مريض</th>
+          </tr>
+        </thead>
+        <tbody id="bedTable"></tbody>
+      </table>
+    </div>
+  </div>
+  <script>
+    checkAuth(["hospital"]);
+  </script>
+  <script>
+    const apiUrl = "https://localhost:7145/api";
+    let hospitalID = null;
+let assignedPatients = new Map();
+
+document.addEventListener("DOMContentLoaded", async () => {
+  const userID = localStorage.getItem("userID");
+  if (!userID) {
+    alert("⚠️ لم يتم العثور على userID. تأكد من تسجيل الدخول.");
+    return;
+  }
+
+  try {
+    const res = await fetch(`${apiUrl}/Hospitals/byUser/${userID}`);
+    if (!res.ok) throw new Error("فشل في جلب بيانات المستشفى");
+
+    const hospital = await res.json();
+    hospitalID = hospital.hospitalID;
+
+    await fetchHospitalCapacity();
+    await fetchBeds();
+  } catch (err) {
+    console.error("🛑 Error fetching hospital info:", err);
+    alert("تعذر تحميل بيانات المستشفى. راجع وحدة التحكم (Console).");
+  }
+});
+
+    async function fetchHospitalCapacity() {
+      const res = await fetch(`${apiUrl}/Hospitals/${hospitalID}/beds`);
+      const capacity = await res.json();
+      document.getElementById("bedCapacity").textContent = capacity;
+    }
+
+    async function fetchBeds() {
+      const res = await fetch(`${apiUrl}/bedManagements/hospital/${hospitalID}`);
+      const beds = await res.json();
+      renderBeds(beds);
+    }
+
+    async function fetchPatients() {
+      const res = await fetch(`${apiUrl}/EmergencyRequest/byHospital/${hospitalID}`);
+      const requests = await res.json();
+      const approved = requests.filter(r => r.status === true);
+      const patients = await Promise.all(
+        approved.map(r =>
+          fetch(`${apiUrl}/Patient/${r.patientID}`).then(res => res.json())
+        )
+      );
+      return approved.map((r, i) => ({
+        id: r.patientID,
+        name: patients[i].paitentName
+      })).filter(p => !assignedPatients.has(p.id));
+    }
+
+    async function renderBeds(beds) {
+      const tbody = document.getElementById("bedTable");
+      tbody.innerHTML = "";
+
+      const patients = await fetchPatients();
+      let occupied = 0;
+
+      beds.forEach(bed => {
+        const row = document.createElement("tr");
+        const isOccupied = bed.condition === true;
+        const cell = document.createElement("td");
+        const assignCell = document.createElement("td");
+
+        if (isOccupied && bed.paitentID && !assignedPatients.has(bed.paitentID)) {
+          assignedPatients.set(bed.paitentID, "مريض غير معروف");
+        }
+
+        if (isOccupied) {
+          occupied++;
+          const name = assignedPatients.get(bed.paitentID) || "مجهول";
+          cell.innerHTML = `<span class="selected-patient">مشغول (${name})</span>`;
+          assignCell.innerHTML = `
+            <button class="btn" onclick="freeBed(${bed.bedID}, ${bed.paitentID})">إخلاء</button>
+          `;
+        } else {
+          const select = document.createElement("select");
+          select.innerHTML = `<option value="">اختر مريض</option>` +
+            patients.map(p => `<option value="${p.id}">${p.name}</option>`).join("");
+
+          const assignBtn = document.createElement("button");
+          assignBtn.className = "btn";
+          assignBtn.textContent = "تأكيد التخصيص";
+          assignBtn.onclick = () => assignPatient(bed.bedID, select.value, select);
+
+          cell.textContent = "متاح";
+          assignCell.appendChild(select);
+          assignCell.appendChild(assignBtn);
+        }
+
+        row.appendChild(cell);
+        row.appendChild(assignCell);
+        tbody.appendChild(row);
+      });
+
+      document.getElementById("occupiedCount").textContent = occupied;
+      document.getElementById("availableCount").textContent = beds.length - occupied;
+    }
+
+    async function assignPatient(bedID, patientID, selectEl) {
+      if (!patientID) return alert("يرجى اختيار مريض.");
+      const patientName = selectEl.options[selectEl.selectedIndex].text;
+      assignedPatients.set(parseInt(patientID), patientName);
+
+      const body = {
+        bedID: bedID,
+        hospitalID: hospitalID,
+        condition: true,
+        paitentID: parseInt(patientID),
+        lastUpdated: new Date().toISOString()
+      };
+
+      await fetch(`${apiUrl}/bedManagements/${bedID}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+
+      await fetchHospitalCapacity();
+      await fetchBeds();
+    }
+
+    async function freeBed(bedID, patientID) {
+      assignedPatients.delete(patientID);
+
+      const body = {
+        bedID: bedID,
+        hospitalID: hospitalID,
+        condition: false,
+        paitentID: null,
+        lastUpdated: new Date().toISOString()
+      };
+
+      await fetch(`${apiUrl}/bedManagements/${bedID}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+
+      await fetchHospitalCapacity();
+      await fetchBeds();
+    }
+  </script>
+</body>
+</html>

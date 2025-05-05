@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>المرضى في الأسرة</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.rtl.min.css" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
+  <script src="checkauth.js"></script>
+  <script src="logout.js"></script>
+  <style>
+    body {
+      font-family: 'Tajawal', sans-serif;
+      background-color: #f4f7fc;
+    }
+
+    .navbar-custom {
+      background-color: #2c3e50;
+    }
+
+    .navbar-custom .nav-link {
+      color: #fff;
+      font-size: 18px;
+      margin: 0 10px;
+      transition: color 0.3s;
+    }
+
+    .navbar-custom .nav-link:hover {
+      color: #1abc9c;
+    }
+
+    .btn-primary {
+      background: #2973B2;
+      border-color: #2973B2;
+    }
+
+    .btn-primary:hover {
+      background: #16a085;
+      border-color: #16a085;
+    }
+
+    .card-title {
+      border-bottom: 2px solid #1abc9c;
+      padding-bottom: 8px;
+    }
+
+    table th {
+      background-color: #1abc9c;
+      color: white;
+    }
+
+    table td, table th {
+      vertical-align: middle;
+    }
+  </style>
+</head>
+<body>
+  <!-- Navbar -->
+  <nav class="navbar navbar-expand-lg navbar-custom py-2">
+    <div class="container">
+      <a class="navbar-brand text-white" href="#">نظام إدارة المستشفى</a>
+      <div class="collapse navbar-collapse justify-content-center">
+        <ul class="navbar-nav">
+          <li class="nav-item"><a class="nav-link" href="HospitalHome.html">الرئيسية</a></li>
+          <li class="nav-item"><a class="nav-link" href="HospitalInfo.html">بيانات المستشفى</a></li>
+          <li class="nav-item"><a class="nav-link" href="bedManagement.html">إدارة الأسرة</a></li>
+          <li class="nav-item"><a class="nav-link" href="EmergencyRequests.html">طلبات الطوارئ</a></li>
+          <li><button onclick="logout()" class="btn btn-danger">تسجيل الخروج</button></li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Page Content -->
+  <div class="container py-4">
+    <div class="card shadow">
+      <div class="card-body">
+        <h4 class="card-title mb-4 text-center">المرضى المخصصون لأسرة المستشفى</h4>
+        <div class="table-responsive">
+          <table class="table table-striped align-middle text-center">
+            <thead>
+              <tr>
+                <th>اسم المريض</th>
+                <th>رقم السرير</th>
+                <th>الملف الطبي</th>
+              </tr>
+            </thead>
+            <tbody id="patientTable">
+              <!-- سيتم إدراج البيانات هنا -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+    checkAuth(["hospital"]);
+  </script>
+  <!-- Bootstrap + Script -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    const apiUrl = "https://localhost:7145/api";
+
+    document.addEventListener("DOMContentLoaded", fetchPatientsOnBeds);
+
+    async function fetchPatientsOnBeds() {
+      const userId = localStorage.getItem("userID");
+      if (!userId) {
+        console.error('No user ID found in localStorage');
+        return;
+      }
+
+      try {
+        const hospitalRes = await fetch(`${apiUrl}/Hospitals/byUser/${userId}`);
+        if (!hospitalRes.ok) throw new Error('Hospital not found');
+
+        const hospital = await hospitalRes.json();
+        const hospitalID = hospital.hospitalID;
+
+        const response = await fetch(`${apiUrl}/bedManagements/hospital/${hospitalID}`);
+        const beds = await response.json();
+        const occupiedBeds = beds.filter(bed => bed.condition === true && bed.paitentID !== null);
+
+        const tableBody = document.getElementById("patientTable");
+        tableBody.innerHTML = "";
+
+        for (const bed of occupiedBeds) {
+          const patient = await fetchPatient(bed.paitentID);
+          const row = document.createElement("tr");
+          row.innerHTML = `
+            <td>${patient.paitentName}</td>
+            <td>${bed.bedID}</td>
+            <td>
+              <button class="btn btn-primary btn-sm" onclick="goToMedicalRecord(${patient.recordID})">
+                عرض السجل الطبي
+              </button>
+            </td>
+          `;
+          tableBody.appendChild(row);
+        }
+      } catch (error) {
+        console.error("خطأ في جلب بيانات المرضى:", error);
+      }
+    }
+
+    async function fetchPatient(patientID) {
+      try {
+        const response = await fetch(`${apiUrl}/Patient/${patientID}`);
+        return await response.json();
+      } catch (error) {
+        console.error(`خطأ في جلب بيانات المريض ID ${patientID}:`, error);
+        return { paitentName: "غير معروف", recordID: 0 };
+      }
+    }
+
+    function goToMedicalRecord(recordID) {
+      window.location.href = `/medical-history.html?recordID=${recordID}`;
+    }
+  </script>
+</body>
+</html>

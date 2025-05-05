@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <title>تعديل بيانات</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.rtl.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal&display=swap" rel="stylesheet">
+  <script src="checkauth.js"></script>
+  <script src="logout.js"></script>
+  <style>
+    body {
+      font-family: 'Tajawal', sans-serif;
+      background-color: #f4f7fc;
+      padding: 20px;
+    }
+    .container {
+      max-width: 600px;
+      background: white;
+      padding: 30px;
+      border-radius: 15px;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+      margin-top: 50px;
+    }
+    .form-group {
+      margin-bottom: 15px;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+      color: #2c3e50;
+    }
+    input, select, textarea {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 16px;
+    }
+    .form-actions {
+      margin-top: 25px;
+      display: flex;
+      gap: 10px;
+    }
+    .btn-save {
+      background-color: #2973B2;
+      color: white;
+    }
+    .btn-save:hover {
+      background-color: #16a085;
+    }
+    .btn-cancel {
+      background-color: #c0392b;
+      color: white;
+    }
+    .btn-cancel:hover {
+      background-color: #a93226;
+    }
+    .toast-container {
+      position: fixed;
+      top: 1rem;
+      left: 1rem;
+      z-index: 9999;
+    }
+  </style>
+</head>
+<body>
+  <div class="toast-container" id="toastContainer"></div>
+
+  <div class="container">
+    <h2 id="pageTitle">تحميل…</h2>
+    <form id="editForm">
+      <div class="form-actions">
+        <button type="submit" class="btn btn-save">💾 حفظ</button>
+        <button type="button" class="btn btn-cancel" onclick="history.back()">إلغاء</button>
+      </div>
+    </form>
+  </div>
+
+  <script>
+    checkAuth(["admin"]);
+  </script>
+  <script>
+    const qs = new URLSearchParams(location.search);
+    const role = qs.get('role');
+    const id = qs.get('id');
+    const form = document.getElementById('editForm');
+    const title = document.getElementById('pageTitle');
+    const apiMap = {
+      patient: 'https://localhost:7145/api/Patient',
+      hospital: 'https://localhost:7145/api/Hospitals',
+      admin: 'https://localhost:7145/api/Admins'
+    };
+
+    title.textContent = `تعديل بيانات ${role}`;
+
+    async function load() {
+      try {
+        const res = await fetch(`${apiMap[role]}/${id}`);
+        if (!res.ok) throw new Error(res.statusText);
+        const obj = await res.json();
+        buildForm(obj);
+      } catch (e) {
+        title.textContent = `خطأ في التحميل: ${e.message}`;
+      }
+    }
+
+    function buildForm(obj) {
+      const defs = {
+        patient: [
+          { name: 'paitentName', label: 'اسم المريض', type: 'text' },
+          { name: 'paitentNationalID', label: 'الرقم القومي', type: 'text' },
+          { name: 'emergencyContact', label: 'جهة الاتصال الطارئة', type: 'text' },
+          { name: 'recordID', label: 'رقم السجل الطبي', type: 'number' },
+          { name: 'userID', label: 'UserID', type: 'number' }
+        ],
+        hospital: [
+          { name: 'hospitalName', label: 'اسم المستشفى', type: 'text' },
+          { name: 'location', label: 'الموقع', type: 'text' },
+          { name: 'phoneNumber', label: 'الهاتف', type: 'tel' },
+          { name: 'bedCapacity', label: 'سعة الأسرة', type: 'number' },
+          { name: 'userID', label: 'UserID', type: 'number' }
+        ],
+        admin: [
+          { name: 'userID', label: 'UserID', type: 'number' }
+        ]
+      };
+
+      defs[role].forEach(field => {
+        const wrapper = document.createElement('div');
+        wrapper.classList.add('form-group');
+        wrapper.innerHTML = `
+          <label for="${field.name}">${field.label}</label>
+          <input id="${field.name}" name="${field.name}" type="${field.type}" value="${obj[field.name] ?? ''}">
+        `;
+        form.insertBefore(wrapper, form.querySelector('.form-actions'));
+      });
+    }
+
+    function showToast(message, type = "success") {
+      const toast = document.createElement("div");
+      toast.className = `toast align-items-center text-bg-${type} border-0 show mb-2`;
+      toast.setAttribute("role", "alert");
+      toast.setAttribute("aria-live", "assertive");
+      toast.setAttribute("aria-atomic", "true");
+
+      toast.innerHTML = `
+        <div class="d-flex">
+          <div class="toast-body">${message}</div>
+          <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+      `;
+      document.getElementById("toastContainer").appendChild(toast);
+      setTimeout(() => toast.remove(), 5000);
+    }
+
+    form.addEventListener('submit', async e => {
+      e.preventDefault();
+      const body = {};
+      new FormData(form).forEach((v, k) => {
+        if (["recordID", "userID"].includes(k)) {
+          body[k] = v.trim() === "" ? null : parseInt(v);
+        } else {
+          body[k] = v;
+        }
+      });
+
+      try {
+        const res = await fetch(`${apiMap[role]}/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+
+        if (!res.ok) throw new Error(await res.text());
+
+        showToast('✅ تم الحفظ بنجاح', 'success');
+        logAdminAction(`تعديل بيانات ${role}`);
+       
+      } catch (e) {
+        showToast('❌ خطأ في الحفظ: ' + e.message, 'danger');
+      }
+    });
+
+    async function logAdminAction(actionType) {
+      const userID = localStorage.getItem("userID");
+      if (!userID) return;
+
+      try {
+        const adminRes = await fetch(`https://localhost:7145/api/Admins`);
+        const admins = await adminRes.json();
+        const currentAdmin = admins.find(a => a.userID == userID);
+        if (!currentAdmin) throw new Error("Admin not found");
+
+        const log = {
+          adminID: currentAdmin.adminID,
+          actionType: actionType,
+          timestamp: new Date().toISOString()
+        };
+
+        await fetch("https://localhost:7145/api/AdminActions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(log)
+        });
+      } catch (err) {
+        console.error("فشل تسجيل النشاط:", err);
+      }
+    }
+
+    load();
+  </script>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
