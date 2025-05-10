@@ -234,7 +234,7 @@
 
   const userID = localStorage.getItem("userID");
   if (!userID) {
-    document.getElementById("toastText").textContent = "⚠️ لم يتم العثور على المستخدم. أعد تسجيل الدخول.";
+    document.getElementById("toastText").textContent = " لم يتم العثور على المستخدم. أعد تسجيل الدخول.";
     toastEl.classList.replace("bg-success", "bg-danger");
     toast.show();
     return;
@@ -248,21 +248,44 @@
     const patient = await patientRes.json();
     const patientID = patient.patientID;
 
-    const data = {
-      hospitalID: selectedHospital.hospitalID,
-      severityLevel: notes,
-      status: null,
-      patientID: patientID,
-      timeOfRequest: new Date().toISOString()
-    };
+    // Check if the patient has any existing emergency requests
+    const pendingRes = await fetch(`https://localhost:7145/api/EmergencyRequest/byPatient/${patientID}`);
+    let existingRequests = [];
+ if (pendingRes.status === 200) {
+    existingRequests = await pendingRes.json();
+ } else if (pendingRes.status !== 404) {
+    throw new Error("تعذر جلب طلبات الطوارئ الحالية");
+ } 
 
-    const res = await fetch("http://localhost:5253/api/EmergencyRequest", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data)
-    });
 
-    if (!res.ok) throw new Error("خطأ في الإرسال");
+    // Check if there are any pending requests (status === null)
+    const hasPending = existingRequests.some(r => r.status === null);
+
+    // If there are pending requests, show a toast notification and prevent submission
+    if (hasPending) {
+        document.getElementById("toastText").textContent = " لديك طلب طوارئ قيد المعالجة بالفعل. لا يمكنك إرسال طلب جديد.";
+        toastEl.classList.replace("bg-success", "bg-danger");
+        toast.show();
+        return;
+    }
+
+// If no pending, proceed to submit
+const data = {
+  hospitalID: selectedHospital.hospitalID,
+  severityLevel: notes,
+  status: null,
+  patientID: patientID,
+  timeOfRequest: new Date().toISOString()
+};
+
+const res = await fetch("http://localhost:5253/api/EmergencyRequest", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify(data)
+});
+
+if (!res.ok) throw new Error("خطأ في الإرسال");
+
 
     modal.hide();
     toastEl.classList.replace("bg-danger", "bg-success");
@@ -273,7 +296,7 @@
     document.getElementById("toastText").textContent = "فشل في الحجز. حاول مرة أخرى.";
     toastEl.classList.replace("bg-success", "bg-danger");
     toast.show();
-    console.error("🚨 Booking failed:", error);
+    console.error(" Booking failed:", error);
   }
 });
 
